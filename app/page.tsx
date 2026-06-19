@@ -1,3 +1,5 @@
+import { logout } from '@/app/actions/auth'
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-sky-300 via-blue-400 to-blue-600 flex flex-col items-center justify-center relative overflow-hidden">
@@ -92,6 +94,16 @@ export default function Home() {
         <div className="mt-4 px-8 py-3 bg-white/25 backdrop-blur-sm rounded-full border border-white/40 text-white font-semibold text-lg shadow-lg">
           준비 중입니다 ✨
         </div>
+
+        {/* Logout */}
+        <form action={logout} className="mt-6">
+          <button
+            type="submit"
+            className="text-blue-100 text-sm underline underline-offset-2 hover:text-white transition-colors"
+          >
+            로그아웃
+          </button>
+        </form>
       </div>
 
       {/* Wave decoration bottom */}
