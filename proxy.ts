@@ -19,7 +19,8 @@ async function verifyToken(token: string): Promise<boolean> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (pathname.startsWith('/login') || pathname.startsWith('/api/')) {
+  // /login 은 인증 없이 접근 가능. 그 외 모든 경로(API 포함)는 세션 쿠키 필요.
+  if (pathname.startsWith('/login')) {
     return NextResponse.next()
   }
 

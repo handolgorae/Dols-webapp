@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { logout } from '@/app/actions/auth'
 
 export default function Home() {
@@ -90,9 +91,20 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Badge */}
-        <div className="mt-4 px-8 py-3 bg-white/25 backdrop-blur-sm rounded-full border border-white/40 text-white font-semibold text-lg shadow-lg">
-          준비 중입니다 ✨
+        {/* 바로가기 */}
+        <div className="mt-4 flex flex-col sm:flex-row gap-3">
+          <Link
+            href="/meetings/new"
+            className="px-7 py-3 bg-white text-blue-600 font-bold rounded-full shadow-lg hover:bg-blue-50 transition-colors"
+          >
+            회의록 작성 ✍️
+          </Link>
+          <Link
+            href="/meetings"
+            className="px-7 py-3 bg-white/25 backdrop-blur-sm border border-white/40 text-white font-semibold rounded-full shadow-lg hover:bg-white/35 transition-colors"
+          >
+            회의록 목록 📋
+          </Link>
         </div>
 
         {/* Logout */}
