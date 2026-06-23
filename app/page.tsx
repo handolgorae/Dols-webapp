@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { logout } from '@/app/actions/auth'
 
 export default function Home() {
   return (
@@ -50,29 +49,18 @@ export default function Home() {
         {/* Dolphin SVG */}
         <div className="w-64 h-64 drop-shadow-2xl animate-bounce" style={{ animationDuration: "3s" }}>
           <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-            {/* Body */}
             <ellipse cx="100" cy="110" rx="70" ry="35" fill="#5BBCDD" />
-            {/* Belly */}
             <ellipse cx="100" cy="118" rx="45" ry="20" fill="#AADEEE" />
-            {/* Head */}
             <ellipse cx="155" cy="100" rx="35" ry="28" fill="#5BBCDD" />
-            {/* Snout / beak */}
             <ellipse cx="188" cy="105" rx="16" ry="9" fill="#5BBCDD" />
-            {/* Smile */}
             <path d="M178 110 Q188 116 198 110" stroke="#3A8FA8" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-            {/* Eye */}
             <circle cx="165" cy="95" r="5" fill="#1A3A4A" />
             <circle cx="167" cy="93" r="1.5" fill="white" />
-            {/* Dorsal fin */}
             <path d="M100 80 Q115 45 130 75" fill="#4AA9CC" stroke="#3A8FA8" strokeWidth="1" />
-            {/* Tail */}
             <path d="M30 110 Q10 90 5 75 Q20 85 30 80 Q20 95 30 110Z" fill="#4AA9CC" />
             <path d="M30 110 Q10 130 5 145 Q20 135 30 140 Q20 125 30 110Z" fill="#4AA9CC" />
-            {/* Flipper */}
             <path d="M120 120 Q105 145 90 135 Q100 125 110 115Z" fill="#4AA9CC" />
-            {/* Cheek blush */}
             <ellipse cx="158" cy="104" rx="8" ry="5" fill="#FF9BB5" opacity="0.5" />
-            {/* Water splashes */}
             <path d="M60 145 Q65 135 70 145" stroke="#AEE4F0" strokeWidth="2.5" fill="none" strokeLinecap="round" />
             <path d="M80 150 Q87 138 94 150" stroke="#AEE4F0" strokeWidth="2.5" fill="none" strokeLinecap="round" />
             <path d="M40 152 Q46 143 52 152" stroke="#AEE4F0" strokeWidth="2" fill="none" strokeLinecap="round" />
@@ -106,16 +94,6 @@ export default function Home() {
             회의록 목록 📋
           </Link>
         </div>
-
-        {/* Logout */}
-        <form action={logout} className="mt-6">
-          <button
-            type="submit"
-            className="text-blue-100 text-sm underline underline-offset-2 hover:text-white transition-colors"
-          >
-            로그아웃
-          </button>
-        </form>
       </div>
 
       {/* Wave decoration bottom */}
