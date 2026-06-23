@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { logout } from '@/app/actions/auth'
 
 export default function Home() {
   return (
@@ -37,17 +38,14 @@ export default function Home() {
       {/* Wave decoration top */}
       <div className="absolute top-0 left-0 right-0 h-16 opacity-30">
         <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="w-full h-full">
-          <path
-            fill="white"
-            d="M0,30 C360,60 720,0 1080,30 C1260,45 1380,20 1440,30 L1440,0 L0,0 Z"
-          />
+          <path fill="white" d="M0,30 C360,60 720,0 1080,30 C1260,45 1380,20 1440,30 L1440,0 L0,0 Z" />
         </svg>
       </div>
 
       {/* Main content */}
       <div className="relative z-10 flex flex-col items-center gap-8 px-6 text-center max-w-2xl">
         {/* Dolphin SVG */}
-        <div className="w-64 h-64 drop-shadow-2xl animate-bounce" style={{ animationDuration: "3s" }}>
+        <div className="w-64 h-64 drop-shadow-2xl animate-bounce" style={{ animationDuration: '3s' }}>
           <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
             <ellipse cx="100" cy="110" rx="70" ry="35" fill="#5BBCDD" />
             <ellipse cx="100" cy="118" rx="45" ry="20" fill="#AADEEE" />
@@ -74,9 +72,7 @@ export default function Home() {
             <br />
             환영합니다! 🌊
           </h1>
-          <p className="text-xl text-blue-100 font-medium drop-shadow">
-            dolgorae.com — 곧 만나요
-          </p>
+          <p className="text-xl text-blue-100 font-medium drop-shadow">dolgorae.com</p>
         </div>
 
         {/* 바로가기 */}
@@ -94,21 +90,25 @@ export default function Home() {
             회의록 목록 📋
           </Link>
         </div>
+
+        {/* Logout */}
+        <form action={logout} className="mt-6">
+          <button
+            type="submit"
+            className="text-blue-100 text-sm underline underline-offset-2 hover:text-white transition-colors"
+          >
+            로그아웃
+          </button>
+        </form>
       </div>
 
       {/* Wave decoration bottom */}
       <div className="absolute bottom-0 left-0 right-0">
         <svg viewBox="0 0 1440 80" preserveAspectRatio="none" className="w-full h-20">
-          <path
-            fill="rgba(255,255,255,0.15)"
-            d="M0,40 C360,80 720,0 1080,40 C1260,60 1380,20 1440,40 L1440,80 L0,80 Z"
-          />
-          <path
-            fill="rgba(255,255,255,0.1)"
-            d="M0,55 C480,20 960,70 1440,55 L1440,80 L0,80 Z"
-          />
+          <path fill="rgba(255,255,255,0.15)" d="M0,40 C360,80 720,0 1080,40 C1260,60 1380,20 1440,40 L1440,80 L0,80 Z" />
+          <path fill="rgba(255,255,255,0.1)" d="M0,55 C480,20 960,70 1440,55 L1440,80 L0,80 Z" />
         </svg>
       </div>
     </main>
-  );
+  )
 }
