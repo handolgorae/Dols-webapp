@@ -62,6 +62,13 @@ export default function MeetingDetailPage() {
         </div>
       </div>
 
+      {meeting.notes?.trim() && (
+        <section className="bg-amber-50 rounded-xl border border-amber-200 p-5">
+          <h2 className="font-semibold text-slate-800 mb-2">📝 메모</h2>
+          <p className="text-sm text-slate-700 whitespace-pre-wrap">{meeting.notes}</p>
+        </section>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* 실시간 회의록 전문 */}
         <section className="bg-white rounded-xl border border-slate-200 p-5">
