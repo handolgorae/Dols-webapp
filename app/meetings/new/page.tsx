@@ -95,7 +95,9 @@ export default function NewMeetingPage() {
 
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const shouldRestartRef = useRef(false)
-  const lastFinalRef = useRef<{ text: string; time: number } | null>(null)
+  // 디바운스: 한국어 음절 조립 및 재시작 중복 방지
+  const pendingSegRef = useRef<{ text: string; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const lastCommittedRef = useRef<{ text: string; time: number } | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -125,16 +127,45 @@ export default function NewMeetingPage() {
     !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 
   // ─── 브라우저 STT ───
-  function makeSegmentIfNew(text: string): TranscriptSegment | null {
-    const trimmed = text.trim()
-    if (trimmed.length < 2) return null
+
+  // 700ms 디바운스로 한국어 음절 조립 중복 및 재시작 직후 중복을 모두 처리한다.
+  // - "한" → "한도" 처럼 짧은 시간 내 prefix 확장 → 긴 쪽만 저장
+  // - 재시작 후 동일 텍스트 재인식 → 6초 내 exact 중복 차단
+  function commitPending(text: string) {
+    pendingSegRef.current = null
     const now = Date.now()
-    const last = lastFinalRef.current
-    if (last && now - last.time < 5000 && last.text.toLowerCase() === trimmed.toLowerCase()) {
-      return null
+    const last = lastCommittedRef.current
+    if (last && now - last.time < 6000 && last.text.toLowerCase() === text.toLowerCase()) return
+    lastCommittedRef.current = { text, time: now }
+    setSegments((prev) => [...prev, { ts: nowTs(), text }])
+  }
+
+  function queueSegment(rawText: string) {
+    const text = rawText.trim()
+    if (text.length < 2) return
+
+    if (pendingSegRef.current) {
+      clearTimeout(pendingSegRef.current.timer)
+      const prev = pendingSegRef.current.text.toLowerCase()
+      const next = text.toLowerCase()
+      if (next === prev || next.startsWith(prev)) {
+        // 동일하거나 이전 텍스트를 포함하는 확장 → 더 긴 텍스트로 교체
+        pendingSegRef.current = { text, timer: setTimeout(() => commitPending(text), 700) }
+        return
+      }
+      if (prev.startsWith(next)) {
+        // 이전 텍스트가 더 길다 → 이전 것 유지
+        pendingSegRef.current = {
+          ...pendingSegRef.current,
+          timer: setTimeout(() => commitPending(pendingSegRef.current!.text), 700),
+        }
+        return
+      }
+      // 완전히 다른 단어 → 이전 것 즉시 커밋
+      commitPending(pendingSegRef.current.text)
     }
-    lastFinalRef.current = { text: trimmed, time: now }
-    return { ts: nowTs(), text: trimmed }
+
+    pendingSegRef.current = { text, timer: setTimeout(() => commitPending(text), 700) }
   }
 
   function startBrowserRecognition() {
@@ -151,17 +182,14 @@ export default function NewMeetingPage() {
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interimText = ''
-      const finals: TranscriptSegment[] = []
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
         if (result.isFinal) {
-          const seg = makeSegmentIfNew(result[0].transcript)
-          if (seg) finals.push(seg)
+          queueSegment(result[0].transcript)
         } else {
           interimText += result[0].transcript
         }
       }
-      if (finals.length > 0) setSegments((prev) => [...prev, ...finals])
       setInterim(interimText)
     }
 
@@ -186,6 +214,11 @@ export default function NewMeetingPage() {
     shouldRestartRef.current = false
     recognitionRef.current?.stop()
     recognitionRef.current = null
+    // 남은 대기 세그먼트 즉시 커밋
+    if (pendingSegRef.current) {
+      clearTimeout(pendingSegRef.current.timer)
+      commitPending(pendingSegRef.current.text)
+    }
   }
 
   // ─── 서버 경유 STT ───
