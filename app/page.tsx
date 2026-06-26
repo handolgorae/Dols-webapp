@@ -68,7 +68,7 @@ export default function Home() {
         {/* Text */}
         <div className="flex flex-col gap-4">
           <h1 className="text-5xl font-bold text-white drop-shadow-lg tracking-tight">
-            돌고래에 오신 걸
+            돌고래닷컴에 오신걸
             <br />
             환영합니다! 🌊
           </h1>
