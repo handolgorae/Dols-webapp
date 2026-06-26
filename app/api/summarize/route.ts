@@ -118,8 +118,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 })
   }
 
-  // provider 는 SUMMARY_PROVIDER 환경변수로 전환 (기본 'grok')
-  const provider = (process.env.SUMMARY_PROVIDER || 'grok').toLowerCase()
+  // ANTHROPIC_API_KEY 있으면 claude, 없으면 grok (SUMMARY_PROVIDER로 명시 재정의 가능)
+  const defaultProvider = process.env.ANTHROPIC_API_KEY ? 'claude' : 'grok'
+  const provider = (process.env.SUMMARY_PROVIDER || defaultProvider).toLowerCase()
 
   try {
     const summary =
