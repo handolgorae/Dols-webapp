@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 export default function TestPage() {
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
 
