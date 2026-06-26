@@ -34,6 +34,7 @@ export interface Meeting {
   attendees: string[]
   engine: SttEngine
   keywords: string[]
+  notes: string
   transcript: MeetingTranscript
   summary: MeetingSummary | null
   createdAt: string

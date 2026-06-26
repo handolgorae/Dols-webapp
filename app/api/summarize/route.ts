@@ -10,6 +10,7 @@ interface SummarizeBody {
   attendees?: string[]
   keywords?: string[]
   transcript?: string
+  notes?: string
 }
 
 interface SummaryResult {
@@ -50,15 +51,17 @@ function extractJson(text: string): SummaryResult {
 }
 
 function buildUserContent(body: SummarizeBody): string {
-  return [
+  const lines = [
     `미팅명: ${body.title ?? ''}`,
     `날짜: ${body.date ?? ''}`,
     `참석자: ${(body.attendees ?? []).join(', ')}`,
     `주요 키워드: ${(body.keywords ?? []).join(', ')}`,
-    '',
-    '회의록 전사본:',
-    body.transcript ?? '',
-  ].join('\n')
+  ]
+  if (body.notes?.trim()) {
+    lines.push('', '참석자 메모 (요약 시 우선 반영):', body.notes.trim())
+  }
+  lines.push('', '회의록 전사본:', body.transcript ?? '')
+  return lines.join('\n')
 }
 
 async function summarizeWithClaude(body: SummarizeBody): Promise<SummaryResult> {

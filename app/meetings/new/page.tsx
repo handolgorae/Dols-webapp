@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import TagInput from '@/components/TagInput'
 import { saveMeeting, newId } from '@/lib/store'
@@ -33,7 +33,6 @@ function nowTs(): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
-// STT 응답의 words(화자정보)를 화자 단위 세그먼트로 변환
 function wordsToSegments(text: string, words: SttWord[]): TranscriptSegment[] {
   if (!words || words.length === 0) {
     return text ? [{ ts: nowTs(), text }] : []
@@ -52,29 +51,48 @@ function wordsToSegments(text: string, words: SttWord[]): TranscriptSegment[] {
   return segments
 }
 
+function extractSummaryJson(text: string): MeetingSummary | null {
+  try {
+    let t = text.trim()
+    if (t.startsWith('```')) {
+      t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
+    }
+    const start = t.indexOf('{')
+    const end = t.lastIndexOf('}')
+    if (start >= 0 && end >= start) t = t.slice(start, end + 1)
+    const parsed = JSON.parse(t) as Partial<MeetingSummary>
+    return {
+      overview: parsed.overview ?? [],
+      decisions: parsed.decisions ?? [],
+      actionItems: parsed.actionItems ?? [],
+      keywords: parsed.keywords ?? [],
+    }
+  } catch {
+    return null
+  }
+}
+
 export default function NewMeetingPage() {
   const router = useRouter()
 
-  // 입력 항목
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [location, setLocation] = useState('')
   const [attendees, setAttendees] = useState<string[]>([])
   const [engine, setEngine] = useState<SttEngine>('browser')
   const [keywords, setKeywords] = useState<string[]>([])
+  const [notes, setNotes] = useState('')
 
-  // 녹음/전사 상태
   const [recordingState, setRecordingState] = useState<RecordingState>('idle')
   const [segments, setSegments] = useState<TranscriptSegment[]>([])
   const [interim, setInterim] = useState('')
   const [sttProcessing, setSttProcessing] = useState(false)
   const [error, setError] = useState('')
 
-  // 요약 상태
   const [summary, setSummary] = useState<MeetingSummary | null>(null)
   const [summarizing, setSummarizing] = useState(false)
+  const [lastSummaryAt, setLastSummaryAt] = useState<Date | null>(null)
 
-  // refs
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const shouldRestartRef = useRef(false)
   const lastFinalRef = useRef<{ text: string; time: number } | null>(null)
@@ -82,17 +100,36 @@ export default function NewMeetingPage() {
   const audioChunksRef = useRef<Blob[]>([])
   const mediaStreamRef = useRef<MediaStream | null>(null)
 
+  // refs for auto-summarize (avoid stale closures in interval)
+  const summarizingRef = useRef(false)
+  const segmentsRef = useRef<TranscriptSegment[]>([])
+  const notesRef = useRef('')
+  const titleRef = useRef('')
+  const dateRef = useRef(date)
+  const attendeesRef = useRef<string[]>([])
+  const keywordsRef = useRef<string[]>([])
+  const lastAutoSegCountRef = useRef(0)
+  const lastSummaryTimeRef = useRef<number | null>(null)
+  const handleSummarizeRef = useRef<() => Promise<void>>(async () => {})
+
+  // Keep refs in sync on every render
+  segmentsRef.current = segments
+  notesRef.current = notes
+  titleRef.current = title
+  dateRef.current = date
+  attendeesRef.current = attendees
+  keywordsRef.current = keywords
+
   const browserSupported =
     typeof window !== 'undefined' &&
     !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 
-  // ───────────────────────── 브라우저 엔진 (Web Speech API) ─────────────────────────
+  // ─── 브라우저 STT ───
   function makeSegmentIfNew(text: string): TranscriptSegment | null {
     const trimmed = text.trim()
     if (trimmed.length < 2) return null
     const now = Date.now()
     const last = lastFinalRef.current
-    // 5초 이내 동일 텍스트는 재시작 시 생기는 중복으로 간주해 무시
     if (last && now - last.time < 5000 && last.text.toLowerCase() === trimmed.toLowerCase()) {
       return null
     }
@@ -124,9 +161,7 @@ export default function NewMeetingPage() {
           interimText += result[0].transcript
         }
       }
-      if (finals.length > 0) {
-        setSegments((prev) => [...prev, ...finals])
-      }
+      if (finals.length > 0) setSegments((prev) => [...prev, ...finals])
       setInterim(interimText)
     }
 
@@ -137,13 +172,8 @@ export default function NewMeetingPage() {
     }
 
     recognition.onend = () => {
-      // 현재 활성 recognition 인스턴스만 재시작 (구 인스턴스 이벤트 무시)
       if (shouldRestartRef.current && recognitionRef.current === recognition) {
-        try {
-          recognition.start()
-        } catch {
-          /* 이미 시작된 경우 무시 */
-        }
+        try { recognition.start() } catch { /* already started */ }
       }
     }
 
@@ -158,7 +188,7 @@ export default function NewMeetingPage() {
     recognitionRef.current = null
   }
 
-  // ───────────────────────── 서버 경유 엔진 (Grok / Google) ─────────────────────────
+  // ─── 서버 경유 STT ───
   async function startMediaRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -168,9 +198,7 @@ export default function NewMeetingPage() {
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data)
       }
-      recorder.onstop = () => {
-        void uploadRecording()
-      }
+      recorder.onstop = () => { void uploadRecording() }
       mediaRecorderRef.current = recorder
       recorder.start()
     } catch {
@@ -181,7 +209,6 @@ export default function NewMeetingPage() {
 
   async function uploadRecording() {
     const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-    // 트랙 정리
     mediaStreamRef.current?.getTracks().forEach((t) => t.stop())
     mediaStreamRef.current = null
     if (blob.size === 0) return
@@ -207,32 +234,23 @@ export default function NewMeetingPage() {
     }
   }
 
-  // ───────────────────────── 녹음 컨트롤 ─────────────────────────
+  // ─── 녹음 컨트롤 ───
   function handleStart() {
     setError('')
-    if (engine === 'browser') {
-      startBrowserRecognition()
-    } else if (engine === 'grok' || engine === 'google') {
-      void startMediaRecording()
-    }
+    if (engine === 'browser') startBrowserRecognition()
+    else void startMediaRecording()
     setRecordingState('recording')
   }
 
   function handlePause() {
-    if (engine === 'browser') {
-      stopBrowserRecognition()
-    } else {
-      mediaRecorderRef.current?.pause()
-    }
+    if (engine === 'browser') stopBrowserRecognition()
+    else mediaRecorderRef.current?.pause()
     setRecordingState('paused')
   }
 
   function handleResume() {
-    if (engine === 'browser') {
-      startBrowserRecognition()
-    } else {
-      mediaRecorderRef.current?.resume()
-    }
+    if (engine === 'browser') startBrowserRecognition()
+    else mediaRecorderRef.current?.resume()
     setRecordingState('recording')
   }
 
@@ -241,43 +259,116 @@ export default function NewMeetingPage() {
       stopBrowserRecognition()
       setInterim('')
     } else {
-      // onstop 핸들러에서 서버 업로드/전사가 진행됨
       mediaRecorderRef.current?.stop()
       mediaRecorderRef.current = null
     }
     setRecordingState('idle')
   }
 
-  // ───────────────────────── 요약 생성 ─────────────────────────
+  // ─── 스트리밍 요약 ───
   const fullText = segments.map((s) => s.text).join(' ')
 
   async function handleSummarize() {
-    if (segments.length === 0) {
+    if (segmentsRef.current.length === 0) {
       setError('요약할 회의록 내용이 없습니다.')
       return
     }
+    if (summarizingRef.current) return
+
+    summarizingRef.current = true
     setSummarizing(true)
     setError('')
+
     try {
-      const res = await fetch('/api/summarize', {
+      const res = await fetch('/api/summarize/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, date, attendees, keywords, transcript: fullText }),
+        body: JSON.stringify({
+          title: titleRef.current,
+          date: dateRef.current,
+          attendees: attendeesRef.current,
+          keywords: keywordsRef.current,
+          notes: notesRef.current,
+          transcript: segmentsRef.current.map((s) => s.text).join(' '),
+        }),
       })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data?.error || '요약 생성에 실패했습니다.')
+
+      if (!res.ok || !res.body) {
+        setError('요약 요청에 실패했습니다.')
         return
       }
-      setSummary(data.summary as MeetingSummary)
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const raw = line.slice(6).trim()
+          if (!raw) continue
+          try {
+            const parsed = JSON.parse(raw) as { d?: string; done?: boolean; full?: string; error?: string }
+            if (parsed.error) {
+              setError(parsed.error)
+              return
+            }
+            if (parsed.done && parsed.full) {
+              const result = extractSummaryJson(parsed.full)
+              if (result) {
+                setSummary(result)
+                setLastSummaryAt(new Date())
+              } else {
+                setError('요약 결과를 파싱할 수 없습니다.')
+              }
+            }
+          } catch { /* ignore incomplete JSON chunks */ }
+        }
+      }
     } catch {
       setError('요약 요청 중 네트워크 오류가 발생했습니다.')
     } finally {
+      summarizingRef.current = false
       setSummarizing(false)
     }
   }
 
-  // ───────────────────────── 저장 ─────────────────────────
+  // Keep ref updated so auto-summarize interval always calls fresh version
+  handleSummarizeRef.current = handleSummarize
+
+  // ─── 자동 요약 (녹음 중 30초마다 확인, 10개 이상 새 세그먼트 or 90초 경과 시 트리거) ───
+  useEffect(() => {
+    if (recordingState !== 'recording') return
+
+    const timer = setInterval(() => {
+      const count = segmentsRef.current.length
+      if (count < 3 || summarizingRef.current) return
+
+      const newSegs = count - lastAutoSegCountRef.current
+      if (newSegs < 1) return
+
+      const elapsed = lastSummaryTimeRef.current
+        ? Date.now() - lastSummaryTimeRef.current
+        : Infinity
+
+      if (newSegs >= 10 || elapsed >= 90_000) {
+        lastAutoSegCountRef.current = count
+        lastSummaryTimeRef.current = Date.now()
+        void handleSummarizeRef.current()
+      }
+    }, 30_000)
+
+    return () => clearInterval(timer)
+  }, [recordingState])
+
+  // ─── 저장 ───
   function handleSave() {
     const now = new Date().toISOString()
     const meeting: Meeting = {
@@ -288,6 +379,7 @@ export default function NewMeetingPage() {
       attendees,
       engine,
       keywords,
+      notes,
       transcript: { segments, fullText },
       summary,
       createdAt: now,
@@ -428,7 +520,7 @@ export default function NewMeetingPage() {
         </p>
       )}
 
-      {/* 2분할: 실시간 회의록 / 요약·액션플랜 */}
+      {/* 실시간 회의록 / 요약·액션플랜 */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* 실시간 회의록 */}
         <section className="bg-white rounded-xl border border-slate-200 p-5">
@@ -456,21 +548,38 @@ export default function NewMeetingPage() {
 
         {/* 요약 / 액션플랜 */}
         <section className="bg-white rounded-xl border border-slate-200 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-slate-800">요약 / 액션플랜</h2>
-            <button
-              onClick={handleSummarize}
-              disabled={summarizing}
-              className="px-4 py-1.5 rounded-full bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
-            >
-              {summarizing ? '생성 중…' : '요약 생성'}
-            </button>
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold text-slate-800">요약 / 액션플랜</h2>
+              {isRecording && (
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                  자동 업데이트 켜짐
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              {lastSummaryAt && (
+                <span className="text-xs text-slate-400">
+                  {lastSummaryAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 업데이트
+                </span>
+              )}
+              <button
+                onClick={() => void handleSummarize()}
+                disabled={summarizing}
+                className="px-4 py-1.5 rounded-full bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {summarizing && (
+                  <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                )}
+                {summarizing ? 'Claude 요약 중…' : '요약 생성'}
+              </button>
+            </div>
           </div>
 
           {!summary ? (
             <p className="text-slate-400 text-sm min-h-[160px]">
-              회의록을 작성한 뒤 “요약 생성”을 누르면 요약·핵심 결정사항·액션플랜이
-              표시됩니다.
+              회의록을 작성한 뒤 &quot;요약 생성&quot;을 누르거나, 녹음 중 자동으로 업데이트됩니다
+              (10개 세그먼트 또는 90초마다).
             </p>
           ) : (
             <div className="flex flex-col gap-4 text-sm">
@@ -523,8 +632,23 @@ export default function NewMeetingPage() {
         </section>
       </div>
 
+      {/* 메모 */}
+      <section className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="font-semibold text-slate-800">📝 메모</h2>
+          <span className="text-xs text-slate-400">요약 생성 시 자동 반영됩니다</span>
+        </div>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="회의 중 자유롭게 메모하세요.&#10;예) 김팀장 — 다음주 금요일까지 보고서 제출 요청&#10;예) 예산 추가 검토 필요 (3Q 초과 가능성)"
+          rows={5}
+          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none placeholder-slate-400"
+        />
+      </section>
+
       {/* 저장 */}
-      <div className="flex justify-end">
+      <div className="flex justify-end pb-4">
         <button
           onClick={handleSave}
           className="px-6 py-2.5 rounded-full bg-green-600 text-white font-semibold hover:bg-green-700"
