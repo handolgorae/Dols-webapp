@@ -77,6 +77,7 @@ export default function NewMeetingPage() {
   // refs
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const shouldRestartRef = useRef(false)
+  const lastFinalRef = useRef<{ text: string; time: number } | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -86,6 +87,19 @@ export default function NewMeetingPage() {
     !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 
   // ───────────────────────── 브라우저 엔진 (Web Speech API) ─────────────────────────
+  function makeSegmentIfNew(text: string): TranscriptSegment | null {
+    const trimmed = text.trim()
+    if (trimmed.length < 2) return null
+    const now = Date.now()
+    const last = lastFinalRef.current
+    // 5초 이내 동일 텍스트는 재시작 시 생기는 중복으로 간주해 무시
+    if (last && now - last.time < 5000 && last.text.toLowerCase() === trimmed.toLowerCase()) {
+      return null
+    }
+    lastFinalRef.current = { text: trimmed, time: now }
+    return { ts: nowTs(), text: trimmed }
+  }
+
   function startBrowserRecognition() {
     const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!Ctor) {
@@ -96,17 +110,18 @@ export default function NewMeetingPage() {
     recognition.lang = 'ko-KR'
     recognition.continuous = true
     recognition.interimResults = true
+    recognition.maxAlternatives = 1
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interimText = ''
       const finals: TranscriptSegment[] = []
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
-        const transcript = result[0].transcript
         if (result.isFinal) {
-          finals.push({ ts: nowTs(), text: transcript.trim() })
+          const seg = makeSegmentIfNew(result[0].transcript)
+          if (seg) finals.push(seg)
         } else {
-          interimText += transcript
+          interimText += result[0].transcript
         }
       }
       if (finals.length > 0) {
@@ -116,15 +131,14 @@ export default function NewMeetingPage() {
     }
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      // no-speech / aborted 등은 자동 재시작으로 처리되므로 무시
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
         setError(`음성인식 오류: ${event.error}`)
       }
     }
 
     recognition.onend = () => {
-      // 침묵으로 자동 종료되어도 녹음 중이면 다시 시작
-      if (shouldRestartRef.current) {
+      // 현재 활성 recognition 인스턴스만 재시작 (구 인스턴스 이벤트 무시)
+      if (shouldRestartRef.current && recognitionRef.current === recognition) {
         try {
           recognition.start()
         } catch {
