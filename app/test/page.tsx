@@ -8,6 +8,8 @@ export default function TestPage() {
     { name: 'AUTH_PASSWORD', set: !!process.env.AUTH_PASSWORD, required: true },
     { name: 'ANTHROPIC_API_KEY', set: !!process.env.ANTHROPIC_API_KEY, required: false, note: '요약 기능 (Claude)' },
     { name: 'XAI_API_KEY', set: !!process.env.XAI_API_KEY, required: false, note: '요약 기능 (Grok 폴백)' },
+    { name: 'VITE_SUPABASE_URL', set: !!process.env.VITE_SUPABASE_URL, required: false, note: '수파베이스 (회의록·자료실)' },
+    { name: 'VITE_SUPABASE_ANON_KEY', set: !!process.env.VITE_SUPABASE_ANON_KEY, required: false, note: '수파베이스 (회의록·자료실)' },
     { name: 'NOTION_TOKEN', set: !!process.env.NOTION_TOKEN, required: false, note: '노션 저장' },
     { name: 'NOTION_DATABASE_ID', set: !!process.env.NOTION_DATABASE_ID, required: false, note: '노션 저장' },
     { name: 'GOOGLE_STT_API_KEY', set: !!process.env.GOOGLE_STT_API_KEY, required: false, note: 'Google STT' },
