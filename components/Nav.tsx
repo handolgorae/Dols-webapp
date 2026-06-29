@@ -8,6 +8,7 @@ const links = [
   { href: '/', label: '홈' },
   { href: '/meetings/new', label: '회의록 작성' },
   { href: '/meetings', label: '회의록 목록' },
+  { href: '/files', label: '자료실' },
   { href: '/test', label: '시스템 상태' },
 ]
 

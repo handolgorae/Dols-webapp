@@ -44,6 +44,22 @@ export function deleteMeeting(id: string): void {
   writeAll(readAll().filter((m) => m.id !== id))
 }
 
+// 외부(Supabase 등)에서 받은 회의록 목록을 localStorage 에 병합한다.
+// 같은 id 는 updatedAt 이 더 최신인 쪽을 유지한다. 병합된 총 개수를 반환.
+export function mergeMeetings(incoming: Meeting[]): number {
+  const byId = new Map<string, Meeting>()
+  for (const m of readAll()) byId.set(m.id, m)
+  for (const m of incoming) {
+    const existing = byId.get(m.id)
+    if (!existing || (m.updatedAt ?? '') >= (existing.updatedAt ?? '')) {
+      byId.set(m.id, m)
+    }
+  }
+  const merged = Array.from(byId.values())
+  writeAll(merged)
+  return merged.length
+}
+
 export function newId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
